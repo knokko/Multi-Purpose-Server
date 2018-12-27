@@ -1,0 +1,6 @@
+name: DoubleServer
+main: nl.knokko.doubleserver.plugin.ServerPlugin
+version: 0.0
+commands:
+  testnetworkmanagers:
+    description: Test command
