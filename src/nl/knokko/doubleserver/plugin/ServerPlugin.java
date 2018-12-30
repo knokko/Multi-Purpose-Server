@@ -1,8 +1,13 @@
 package nl.knokko.doubleserver.plugin;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 
+import org.bukkit.Bukkit;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -14,15 +19,37 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.ChannelPipeline;
 import net.minecraft.server.v1_12_R1.MinecraftServer;
 import net.minecraft.server.v1_12_R1.ServerConnection;
-import nl.knokko.doubleserver.handler.WebHandler;
-import nl.knokko.doubleserver.listener.*;
+import nl.knokko.doubleserver.handler.TestSocketHandlerFactory;
+import nl.knokko.doubleserver.handler.WebSocketHandlerFactory;
+import nl.knokko.doubleserver.helper.WebHelper;
+import nl.knokko.doubleserver.listener.ChannelListener;
+import nl.knokko.doubleserver.listener.HTTPListener;
+import nl.knokko.doubleserver.listener.TCPListener;
+import nl.knokko.doubleserver.listener.WebSocketListener;
 
 public class ServerPlugin extends JavaPlugin implements Listener {
+	
+	private static ServerPlugin instance;
+	
+	public static void setWebSocketHandlerFactory(WebSocketHandlerFactory newFactory) {
+		instance.socketHandlerFactory = newFactory;
+	}
+	
+	public static WebSocketHandlerFactory getWebSocketHandlerFactory() {
+		return instance.socketHandlerFactory;
+	}
+	
+	private WebSocketHandlerFactory socketHandlerFactory;
+	private Collection<WebSocketListener> websocketListeners;
 
 	@Override
 	@SuppressWarnings("unchecked")
 	public void onEnable() {
 		try {
+			instance = this;
+			socketHandlerFactory = new TestSocketHandlerFactory();
+			websocketListeners = new LinkedList<WebSocketListener>();
+			
 			// Hacking my way into the network channels requires some deprecated methods and
 			// dirty reflection
 			@SuppressWarnings("deprecation")
@@ -73,14 +100,22 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 										else if (firstByte == 71) {
 											byte[] data = new byte[message.readableBytes()];
 											message.getBytes(0, data);
-											WebHandler.Type type = WebHandler.determineConnectionType(data);
-											if (type == WebHandler.Type.HTTP) {
+											System.out.println(Arrays.toString(data));
+											WebHelper.Type type = WebHelper.determineConnectionType(data);
+											System.out.println("type is " + type);
+											if (type == WebHelper.Type.HTTP) {
 												listener = new HTTPListener();
 												listener.readInitial(ctx, message);
-											} else if (type == WebHandler.Type.WEBSOCKET) {
-												// TODO Find a nice way to handle web socket connections
-												listener = new WebSocketListener();
-												listener.readInitial(ctx, message);
+											} else if (type == WebHelper.Type.WEBSOCKET) {
+												if (socketHandlerFactory != null) {
+													listener = new WebSocketListener(socketHandlerFactory.createHandler());
+													websocketListeners.add((WebSocketListener) listener);
+													listener.readInitial(ctx, message);
+												} else {
+													Bukkit.getLogger().warning("A websocket handshake was received, but there is no websocket handler factory");
+													deactivated = true;
+													super.channelRead(ctx, msg);
+												}
 											} else {
 												deactivated = true;
 												super.channelRead(ctx, msg);
@@ -95,7 +130,7 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 													"We are dealing with a secure websocket or https connection");
 											byte[] data = new byte[message.readableBytes()];
 											message.getBytes(0, data);
-											System.out.println(new String(data));
+											System.out.println(Arrays.toString(data));
 										}
 
 										// My applications
@@ -118,8 +153,26 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 					});
 				}
 			});
+			Bukkit.getScheduler().scheduleSyncRepeatingTask(instance, () -> {
+				Iterator<WebSocketListener> iterator = websocketListeners.iterator();
+				while (iterator.hasNext()) {
+					if (iterator.next().isClosed()) {
+						iterator.remove();
+					}
+				}
+			}, 100, 100);
 		} catch (Exception ex) {
 			ex.printStackTrace();
 		}
+	}
+	
+	@Override
+	public void onDisable() {
+		for (WebSocketListener listener : websocketListeners) {
+			listener.onServerStop();
+		}
+		websocketListeners.clear();
+		socketHandlerFactory = null;
+		instance = null;
 	}
 }

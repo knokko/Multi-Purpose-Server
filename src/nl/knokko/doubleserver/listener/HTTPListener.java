@@ -1,12 +1,12 @@
 package nl.knokko.doubleserver.listener;
 
+import static nl.knokko.doubleserver.helper.WebHelper.*;
+
 import java.nio.charset.StandardCharsets;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import nl.knokko.util.ArrayHelper;
-
-import static nl.knokko.doubleserver.handler.WebHandler.*;
 
 public class HTTPListener implements ChannelListener {
 

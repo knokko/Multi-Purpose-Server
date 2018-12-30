@@ -1,4 +1,4 @@
-package nl.knokko.doubleserver.handler;
+package nl.knokko.doubleserver.helper;
 
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -10,7 +10,7 @@ import nl.knokko.util.ArrayHelper;
 
 import static java.nio.charset.StandardCharsets.UTF_8;;
 
-public class WebHandler {
+public class WebHelper {
 	
 	public static final byte[] FAVICON;
 	public static final byte[] PAGE = "<html> <body> <p>My first StackOverflow answer </p> </body> </html>".getBytes(UTF_8);
@@ -49,6 +49,7 @@ public class WebHandler {
 			}
 		}
 		if (connectionType != null) {
+			System.out.println("Connection type is " + connectionType);
 			if (connectionType.equalsIgnoreCase("keep-alive")) {
 				return Type.HTTP;
 			} else if (connectionType.equalsIgnoreCase("upgrade")) {
