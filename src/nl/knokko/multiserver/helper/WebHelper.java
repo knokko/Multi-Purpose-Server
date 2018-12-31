@@ -1,8 +1,9 @@
-package nl.knokko.doubleserver.helper;
+package nl.knokko.multiserver.helper;
 
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 import javax.imageio.ImageIO;
 
@@ -40,24 +41,31 @@ public class WebHelper {
 		INVALID;
 	}
 	
-	public static Type determineConnectionType(byte[] request) {
-		byte[][] splitted = ArrayHelper.split(request, LINE_TERMINATOR);
+	public static Type determineConnectionType(byte[] data) {
 		String connectionType = null;
-		for (byte[] line : splitted) {
-			if (ArrayHelper.startsWith(line, CONNECTION_PREFIX)) {
-				connectionType = new String(line, CONNECTION_PREFIX.length, line.length - CONNECTION_PREFIX.length, UTF_8);
+		int dataIndex = ArrayHelper.indexOf(data, LINE_TERMINATOR[1], 0) + 1;
+		while (dataIndex != -1) {
+			if (ArrayHelper.startsWith(data, CONNECTION_PREFIX, dataIndex)) {
+				int offset = dataIndex + CONNECTION_PREFIX.length;
+				int endIndex = ArrayHelper.indexOf(data, LINE_TERMINATOR[0], offset);
+				connectionType = new String(data, offset, endIndex - offset, StandardCharsets.UTF_8);
+				break;
+			} else {
+				dataIndex = ArrayHelper.indexOf(data, LINE_TERMINATOR[1], dataIndex) + 1;
 			}
 		}
 		if (connectionType != null) {
 			System.out.println("Connection type is " + connectionType);
-			if (connectionType.equalsIgnoreCase("keep-alive")) {
-				return Type.HTTP;
-			} else if (connectionType.equalsIgnoreCase("upgrade")) {
+			if (connectionType.contains("upgrade") || connectionType.contains("Upgrade")) {
 				return Type.WEBSOCKET;
+			}
+			else if (connectionType.equalsIgnoreCase("keep-alive")) {
+				return Type.HTTP;
 			} else {
 				return Type.INVALID;
 			}
 		} else {
+			System.out.println("connection type is null");
 			return Type.INVALID;
 		}
 	}

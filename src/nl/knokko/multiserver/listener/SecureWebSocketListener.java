@@ -1,4 +1,4 @@
-package nl.knokko.doubleserver.listener;
+package nl.knokko.multiserver.listener;
 
 import java.nio.charset.StandardCharsets;
 
@@ -14,10 +14,10 @@ public class SecureWebSocketListener implements ChannelListener {
 		System.out.println("Read secure websocket: " + new String(data, StandardCharsets.UTF_8));
 	}
 
-	@Override
-	public void readInitial(ChannelHandlerContext ctx, ByteBuf message) {
-		byte[] data = new byte[message.readableBytes()];
-		message.readBytes(data);
+	public void readInitial(ChannelHandlerContext ctx, byte[] data) {
 		System.out.println("Read initial secure websocket: " + new String(data, StandardCharsets.UTF_8));
 	}
+
+	@Override
+	public void onClose(ChannelHandlerContext ctx) {}
 }

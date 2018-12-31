@@ -1,4 +1,4 @@
-package nl.knokko.doubleserver.handler;
+package nl.knokko.websocket.handler;
 
 import java.nio.ByteBuffer;
 

@@ -1,4 +1,4 @@
-package nl.knokko.doubleserver.listener;
+package nl.knokko.multiserver.listener;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -23,11 +23,12 @@ import com.google.common.collect.Lists;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
-import nl.knokko.doubleserver.handler.WebSocketHandler;
+import nl.knokko.multiserver.plugin.ServerPlugin;
+import nl.knokko.websocket.handler.WebSocketHandler;
 
 public class WebSocketListener implements ChannelListener, org.java_websocket.WebSocketListener {
 	
-	private static ByteBuffer convert(ByteBuf buf) {
+	public static ByteBuffer convert(ByteBuf buf) {
 		byte[] bytes;
 		if (buf.hasArray()) {
 			bytes = buf.array();
@@ -35,10 +36,14 @@ public class WebSocketListener implements ChannelListener, org.java_websocket.We
 			bytes = new byte[buf.readableBytes()];
 			buf.readBytes(bytes);
 		}
+		return convert(bytes);
+	}
+	
+	public static ByteBuffer convert(byte[] bytes) {
 		return ByteBuffer.wrap(bytes);
 	}
 	
-	private static ByteBuf convert(ByteBuffer buffer, ChannelHandlerContext ctx) {
+	public static ByteBuf convert(ByteBuffer buffer, ChannelHandlerContext ctx) {
 		byte[] bytes;
 		if (buffer.hasArray()) {
 			bytes = buffer.array();
@@ -46,6 +51,10 @@ public class WebSocketListener implements ChannelListener, org.java_websocket.We
 			bytes = new byte[buffer.remaining()];
 			buffer.get(bytes);
 		}
+		return convert(bytes, ctx);
+	}
+	
+	public static ByteBuf convert(byte[] bytes, ChannelHandlerContext ctx) {
 		ByteBuf buf = ctx.alloc().buffer(bytes.length);
 		buf.writeBytes(bytes);
 		return buf;
@@ -56,8 +65,7 @@ public class WebSocketListener implements ChannelListener, org.java_websocket.We
 	private final WebSocketImpl impl;
 	
 	private ChannelHandlerContext ctx;
-	
-	private boolean closed;
+	private boolean calledOnClose;
 	
 	public WebSocketListener(WebSocketHandler handler) {
 		draft = new Draft_6455();
@@ -72,8 +80,7 @@ public class WebSocketListener implements ChannelListener, org.java_websocket.We
 		impl.decode(convert(message));
 	}
 
-	@Override
-	public void readInitial(ChannelHandlerContext ctx, ByteBuf message) {
+	public void readInitial(ChannelHandlerContext ctx, byte[] message) {
 		this.ctx = ctx;
 		impl.decode(convert(message));
 	}
@@ -98,28 +105,39 @@ public class WebSocketListener implements ChannelListener, org.java_websocket.We
 
 	@Override
 	public void onWebsocketMessage(WebSocket conn, String message) {
-		handler.onMessage(message, conn);
+		Bukkit.getScheduler().scheduleSyncDelayedTask(ServerPlugin.getInstance(), () -> {
+			handler.onMessage(message, conn);
+		});
 	}
 
 	@Override
 	public void onWebsocketMessage(WebSocket conn, ByteBuffer blob) {
-		handler.onMessage(blob, conn);
+		Bukkit.getScheduler().scheduleSyncDelayedTask(ServerPlugin.getInstance(), () -> {
+			handler.onMessage(blob, conn);
+		});
 	}
 
 	@Override
 	public void onWebsocketOpen(WebSocket conn, Handshakedata d) {
-		handler.onOpen((ClientHandshake) d, conn);
+		Bukkit.getScheduler().scheduleSyncDelayedTask(ServerPlugin.getInstance(), () -> {
+			handler.onOpen((ClientHandshake) d, conn);
+		});
 	}
 
 	@Override
 	public void onWebsocketClose(WebSocket ws, int code, String reason, boolean remote) {
-		handler.onClose(reason, code, ws);
+		if (!calledOnClose) {
+			calledOnClose = true;
+			// The calledOnClose is set to true immediately because this method is preferred over onClose
+			Bukkit.getScheduler().scheduleSyncDelayedTask(ServerPlugin.getInstance(), () -> {
+				handler.onClose(reason, code, ws);
+			});
+		}
 	}
 
 	@Override
 	public void onWebsocketClosing(WebSocket ws, int code, String reason, boolean remote) {
 		System.out.println("onWebsocketClosing");
-		closed = true;
 		ctx.close();
 	}
 
@@ -149,7 +167,6 @@ public class WebSocketListener implements ChannelListener, org.java_websocket.We
 		ByteBuffer next = buffers.poll();
 		while (next != null) {
 			ctx.writeAndFlush(convert(next, ctx));
-			System.out.println("Sent bytes");
 			next = buffers.poll();
 		}
 	}
@@ -164,13 +181,21 @@ public class WebSocketListener implements ChannelListener, org.java_websocket.We
 		return (InetSocketAddress) ctx.channel().remoteAddress();
 	}
 	
-	public boolean isClosed() {
-		return closed;
+	public WebSocketImpl getImplementation() {
+		return impl;
 	}
-	
-	public void onServerStop() {
-		if (!closed) {
-			impl.close(CloseFrame.GOING_AWAY, "Server stopping");
+
+	@Override
+	public void onClose(ChannelHandlerContext ctx) {
+		if (!calledOnClose) {
+			Bukkit.getScheduler().scheduleSyncDelayedTask(ServerPlugin.getInstance(), () -> {
+				if (!calledOnClose) {
+					// The calledOnClose is set later than in onWebsocketClose because onWebsocketClose is
+					// the preferred close method
+					handler.onClose("Disconnected", CloseFrame.ABNORMAL_CLOSE, impl);
+					calledOnClose = true;
+				}
+			});
 		}
 	}
 }

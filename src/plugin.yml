@@ -1,6 +1,15 @@
-name: DoubleServer
-main: nl.knokko.doubleserver.plugin.ServerPlugin
-version: 0.0
+name: MultiPurposeServer
+version: 0.2
+description: Makes it possible to use this minecraft server as webserver and tcp server
+load: POSTWORLD
+author: knokko
+main: nl.knokko.multiserver.plugin.ServerPlugin
+database: no
+depend: []
+softdepend: []
+loadbefore: []
 commands:
-  testnetworkmanagers:
-    description: Test command
+  website:
+    description: Sends you the address of the website and lets operators manage the website
+    useage: /website [reload]
+    aliases: [web]
