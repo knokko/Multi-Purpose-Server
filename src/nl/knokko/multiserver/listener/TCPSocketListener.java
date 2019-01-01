@@ -7,13 +7,13 @@ import io.netty.channel.ChannelHandlerContext;
 import nl.knokko.multiserver.plugin.ServerPlugin;
 import nl.knokko.tcp.handler.TCPHandler;
 
-public class TCPListener implements ChannelListener {
+public class TCPSocketListener implements ChannelListener {
 	
 	private final TCPHandler handler;
 	
 	private ChannelHandlerContext ctx;
 	
-	public TCPListener(TCPHandler handler) {
+	public TCPSocketListener(TCPHandler handler) {
 		this.handler = handler;
 	}
 
@@ -41,6 +41,10 @@ public class TCPListener implements ChannelListener {
 		if (ctx.channel().isOpen()) {
 			ctx.close();
 		}
+	}
+	
+	public ChannelHandlerContext getContext() {
+		return ctx;
 	}
 
 	@Override

@@ -35,18 +35,31 @@ import nl.knokko.http.response.DefaultContentTypes;
 import nl.knokko.multiserver.helper.WebHelper;
 import nl.knokko.multiserver.listener.ChannelListener;
 import nl.knokko.multiserver.listener.HTTPListener;
-import nl.knokko.multiserver.listener.TCPListener;
+import nl.knokko.multiserver.listener.TCPSocketListener;
 import nl.knokko.multiserver.listener.WebSocketListener;
 import nl.knokko.tcp.handler.TCPHandler;
-import nl.knokko.tcp.handler.factory.TCPHandlerFactory;
+import nl.knokko.tcp.handler.factory.TCPSocketHandlerFactory;
 import nl.knokko.websocket.handler.WebSocketHandler;
 import nl.knokko.websocket.handler.factory.WebSocketHandlerFactory;
 
 public class ServerPlugin extends JavaPlugin implements Listener {
 	
+	/**
+	 * The first byte of the first message sent by a minecraft client is always 16.
+	 */
 	public static final byte FIRST_MINECRAFT_BYTE = 16;
+	/**
+	 * The first byte of the first message of a custom TCP connection must be 47 to distinguish it from
+	 * other connection types.
+	 */
 	public static final byte FIRST_TCP_BYTE = 47;
+	/**
+	 * The first byte of the first message of an insecure web connection is always 71.
+	 */
 	public static final byte FIRST_WEB_BYTE = 71;
+	/**
+	 * The first byte of the first message of a secure web connection is always 22.
+	 */
 	public static final byte FIRST_SECURE_WEB_BYTE = 22;
 	
 	private static ServerPlugin instance;
@@ -56,23 +69,23 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 	}
 	
 	public static WebSocketHandlerFactory getWebSocketHandlerFactory() {
-		return instance.socketHandlerFactory;
+		return instance.webSocketHandlerFactory;
 	}
 	
-	public static TCPHandlerFactory getTCPHandlerFactory() {
-		return instance.tcpHandlerFactory;
+	public static TCPSocketHandlerFactory getTCPSocketHandlerFactory() {
+		return instance.tcpSocketHandlerFactory;
 	}
 	
 	public static HTTPHandler getHTTPHandler() {
 		return instance.httpHandler;
 	}
 	
-	public static Collection<WebSocketListener> getWebsocketListeners(){
-		return instance.websocketListeners;
+	public static Collection<WebSocketListener> getWebSocketListeners(){
+		return instance.webSocketListeners;
 	}
 	
-	public static Collection<TCPListener> getTCPListeners(){
-		return instance.tcpListeners;
+	public static Collection<TCPSocketListener> getTCPSocketListeners(){
+		return instance.tcpSocketListeners;
 	}
 	
 	public static String getContentTypeForExtension(String extension) {
@@ -99,11 +112,11 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 	private Map<String,String> contentTypes;
 	
 	private HTTPHandler httpHandler;
-	private WebSocketHandlerFactory socketHandlerFactory;
-	private TCPHandlerFactory tcpHandlerFactory;
+	private WebSocketHandlerFactory webSocketHandlerFactory;
+	private TCPSocketHandlerFactory tcpSocketHandlerFactory;
 	
-	private Collection<WebSocketListener> websocketListeners;
-	private Collection<TCPListener> tcpListeners;
+	private Collection<WebSocketListener> webSocketListeners;
+	private Collection<TCPSocketListener> tcpSocketListeners;
 	
 	public void readConfig() {
 		FileConfiguration config = getConfig();
@@ -112,15 +125,15 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 	}
 	
 	public void readTCPConfig(FileConfiguration config) {
-		String tcpHandlerName = config.getString("tcp-handler-factory");
-		if (tcpHandlerName != null) {
-			tcpHandlerFactory = null;
+		String tcpSocketHandlerName = config.getString("tcp-socket-handler-factory");
+		if (tcpSocketHandlerName == null) {
+			tcpSocketHandlerFactory = null;
 		} else {
 			try {
-				tcpHandlerFactory = (TCPHandlerFactory) Class.forName(tcpHandlerName).newInstance();
+				tcpSocketHandlerFactory = (TCPSocketHandlerFactory) Class.forName(tcpSocketHandlerName).newInstance();
 			} catch (Exception ex) {
-				Bukkit.getLogger().log(Level.SEVERE, "Failed to load the TCP handler factory " + tcpHandlerName, ex);
-				tcpHandlerFactory = null;
+				Bukkit.getLogger().log(Level.SEVERE, "Failed to load the TCP handler factory " + tcpSocketHandlerName, ex);
+				tcpSocketHandlerFactory = null;
 			}
 		}
 	}
@@ -176,15 +189,15 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 				httpHandler = null;
 			}
 		}
-		String wsHandlerName = config.getString("websocket-handler-factory");
-		if (wsHandlerName == null) {
-			socketHandlerFactory = null;
+		String wsHandlerFactoryName = config.getString("websocket-handler-factory");
+		if (wsHandlerFactoryName == null) {
+			webSocketHandlerFactory = null;
 		} else {
 			try {
-				socketHandlerFactory = (WebSocketHandlerFactory) Class.forName(wsHandlerName).newInstance();
+				webSocketHandlerFactory = (WebSocketHandlerFactory) Class.forName(wsHandlerFactoryName).newInstance();
 			} catch (Exception ex) {
-				Bukkit.getLogger().log(Level.SEVERE, "Failed to load websocket handler " + wsHandlerName, ex);
-				socketHandlerFactory = null;
+				Bukkit.getLogger().log(Level.SEVERE, "Failed to load websocket handler " + wsHandlerFactoryName, ex);
+				webSocketHandlerFactory = null;
 			}
 		}
 		saveConfig();
@@ -196,8 +209,8 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 		try {
 			instance = this;
 			readConfig();
-			websocketListeners = new LinkedList<WebSocketListener>();
-			tcpListeners = new LinkedList<TCPListener>();
+			webSocketListeners = new LinkedList<WebSocketListener>();
+			tcpSocketListeners = new LinkedList<TCPSocketListener>();
 			
 			// Hacking my way into the network channels requires a deprecated method and reflection
 			Field endPointsField = ServerConnection.class.getDeclaredField("g");
@@ -248,11 +261,11 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 												httpListener.readHandshake(ctx, data);
 												listener = httpListener;
 											} else if (type == WebHelper.Type.WEBSOCKET) {
-												if (socketHandlerFactory != null) {
-													WebSocketHandler websocketHandler = socketHandlerFactory.createHandler(ctx);
+												if (webSocketHandlerFactory != null) {
+													WebSocketHandler websocketHandler = webSocketHandlerFactory.createHandler(ctx);
 													if (websocketHandler != null) {
 														WebSocketListener websocketListener = new WebSocketListener(websocketHandler);
-														websocketListeners.add(websocketListener);
+														webSocketListeners.add(websocketListener);
 														websocketListener.readInitial(ctx, data);
 														listener = websocketListener;
 													} else {
@@ -282,11 +295,11 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 
 										// For non-minecraft tcp connections
 										else if (firstByte == FIRST_TCP_BYTE) {
-											if (tcpHandlerFactory != null) {
-												TCPHandler tcpHandler = tcpHandlerFactory.createHandler(ctx);
+											if (tcpSocketHandlerFactory != null) {
+												TCPHandler tcpHandler = tcpSocketHandlerFactory.createHandler(ctx);
 												if (tcpHandler != null) {
-													TCPListener tcpListener = new TCPListener(tcpHandler);
-													tcpListeners.add(tcpListener);
+													TCPSocketListener tcpListener = new TCPSocketListener(tcpHandler);
+													tcpSocketListeners.add(tcpListener);
 													// The tcp listener doesn't need to know that the first byte is FIRST_TCP_BYTE
 													message.readByte();
 													tcpListener.readInitial(ctx, message);
@@ -326,7 +339,7 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 				}
 			});
 			Bukkit.getScheduler().scheduleSyncRepeatingTask(instance, () -> {
-				Iterator<WebSocketListener> webSocketIterator = websocketListeners.iterator();
+				Iterator<WebSocketListener> webSocketIterator = webSocketListeners.iterator();
 				while (webSocketIterator.hasNext()) {
 					WebSocketListener next = webSocketIterator.next();
 					if (next.getImplementation().isOpen()) {
@@ -335,7 +348,7 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 						webSocketIterator.remove();
 					}
 				}
-				Iterator<TCPListener> tcpIterator = tcpListeners.iterator();
+				Iterator<TCPSocketListener> tcpIterator = tcpSocketListeners.iterator();
 				while (tcpIterator.hasNext()) {
 					if (tcpIterator.next().isClosed()) {
 						tcpIterator.remove();
@@ -349,16 +362,16 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 	
 	@Override
 	public void onDisable() {
-		for (WebSocketListener listener : websocketListeners) {
+		for (WebSocketListener listener : webSocketListeners) {
 			if (listener.getImplementation().isOpen()) {
 				listener.getImplementation().close(CloseFrame.GOING_AWAY, "Server is stopping");
 			}
 		}
-		for (TCPListener listener : tcpListeners) {
+		for (TCPSocketListener listener : tcpSocketListeners) {
 			listener.onServerStop();
 		}
-		websocketListeners.clear();
-		socketHandlerFactory = null;
+		webSocketListeners.clear();
+		webSocketHandlerFactory = null;
 		instance = null;
 	}
 }
