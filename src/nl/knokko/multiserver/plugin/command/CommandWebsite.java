@@ -19,22 +19,26 @@ public class CommandWebsite implements CommandExecutor {
 	public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 		if (args.length == 0) {
 			if (ServerPlugin.getHTTPHandler() != null) {
-				String address = "http://" + Bukkit.getIp() + ":" + Bukkit.getPort();
-				if (sender instanceof Player) {
-					JSONMessage message = JSONMessage.create("The website address is ");
-					MessagePart link = message.new MessagePart(address);
-					link.setColor(ChatColor.BLUE);
-					JSONMessage hoverMessage = JSONMessage.create("Visit the website");
-					hoverMessage.color(ChatColor.YELLOW);
-					link.setOnHover(HoverEvent.showText(hoverMessage));
-					link.setOnClick(ClickEvent.openURL(address));
-					message.then(link);
-					message.send((Player) sender);
+				String address = ServerPlugin.getAddress();
+				if (address == null) {
+					sender.sendMessage("Currently, the ip is unknown. The admin can set in in server.properties or the plug-in config");
 				} else {
-					sender.sendMessage("The website address is " + address);
+					if (sender instanceof Player) {
+						JSONMessage message = JSONMessage.create("The website address is ");
+						MessagePart link = message.new MessagePart(address);
+						link.setColor(ChatColor.BLUE);
+						JSONMessage hoverMessage = JSONMessage.create("Visit the website");
+						hoverMessage.color(ChatColor.YELLOW);
+						link.setOnHover(HoverEvent.showText(hoverMessage));
+						link.setOnClick(ClickEvent.openURL(address));
+						message.then(link);
+						message.send((Player) sender);
+					} else {
+						sender.sendMessage("The website address is " + address);
+					}
 				}
 			} else {
-				sender.sendMessage(ChatColor.YELLOW + "This server doesn't have a website?");
+				sender.sendMessage(ChatColor.YELLOW + "This server doesn't have a website");
 			}
 		} else {
 			if (args[0].equals("reload")) {

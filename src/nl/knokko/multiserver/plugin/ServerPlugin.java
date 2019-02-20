@@ -2,7 +2,6 @@ package nl.knokko.multiserver.plugin;
 
 import java.io.File;
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -37,36 +36,36 @@ import nl.knokko.multiserver.listener.ChannelListener;
 import nl.knokko.multiserver.listener.HTTPListener;
 import nl.knokko.multiserver.listener.TCPSocketListener;
 import nl.knokko.multiserver.listener.WebSocketListener;
+import nl.knokko.multiserver.plugin.command.CommandWebsite;
 import nl.knokko.tcp.handler.TCPHandler;
 import nl.knokko.tcp.handler.factory.TCPSocketHandlerFactory;
 import nl.knokko.websocket.handler.WebSocketHandler;
 import nl.knokko.websocket.handler.factory.WebSocketHandlerFactory;
 
 public class ServerPlugin extends JavaPlugin implements Listener {
-
+	
 	/**
-	 * The first byte of the first message sent by a minecraft client is always 16.
+	 * All custom tcp connections must start their first message with these bytes. This makes it easy to
+	 * distinguish custom connections from minecraft packets. These bytes were chosen randomly by me simply
+	 * because a decision had to be made. Hypothetically, if a player connection starts with exactly those
+	 * bytes, it will be prevented from connection. But the chance that this happens should be 1 / 2^64,
+	 * which I consider acceptable.
 	 */
-	public static final byte FIRST_MINECRAFT_BYTE = 16;
+	private static final byte[] FIRST_TCP_BYTES = {47, 121, 73, 21, -40, 31, 0, 57};
+	
 	/**
-	 * The first byte of the first message of a custom TCP connection must be 47 to
-	 * distinguish it from other connection types.
+	 * I yet have to find out why, but all secure web socket connections start with these bytes
 	 */
-	public static final byte FIRST_TCP_BYTE = 47;
-	/**
-	 * The first byte of the first message of an insecure web connection is always
-	 * 71.
-	 */
-	public static final byte FIRST_WEB_BYTE = 71;
-	/**
-	 * The first byte of the first message of a secure web connection is always 22.
-	 */
-	public static final byte FIRST_SECURE_WEB_BYTE = 22;
+	static final byte[] FIRST_WSS_BYTES = {22, 3};
 
 	private static ServerPlugin instance;
 
 	public static ServerPlugin getInstance() {
 		return instance;
+	}
+
+	public static String getAddress() {
+		return instance.serverAddress;
 	}
 
 	public static WebSocketHandlerFactory getWebSocketHandlerFactory() {
@@ -119,10 +118,25 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 	private Collection<WebSocketListener> webSocketListeners;
 	private Collection<TCPSocketListener> tcpSocketListeners;
 
+	private String serverAddress;
+
 	public void readConfig() {
 		FileConfiguration config = getConfig();
 		readWebsiteConfig(config);
 		readTCPConfig(config);
+		if (config.contains("server-ip")) {
+			serverAddress = config.getString("server-ip");
+		} else {
+			String ip = Bukkit.getIp();
+			if (ip.isEmpty()) {
+				serverAddress = null;
+				Bukkit.getLogger().warning("The server ip address wasn't found in the server.properties and"
+						+ " not in the config either. Enter the ip in server.properties or set 'server-ip'"
+						+ " in the config.");
+			} else {
+				serverAddress = ip + ":" + Bukkit.getPort();
+			}
+		}
 	}
 
 	public void readTCPConfig(FileConfiguration config) {
@@ -212,6 +226,7 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 	public void onEnable() {
 		try {
 			instance = this;
+			getCommand("website").setExecutor(new CommandWebsite());
 			readConfig();
 			webSocketListeners = new LinkedList<WebSocketListener>();
 			tcpSocketListeners = new LinkedList<TCPSocketListener>();
@@ -230,52 +245,9 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 					new ChannelInboundHandlerAdapter() {
 
 						@Override
-						public void channelActive(ChannelHandlerContext ctx) throws Exception {
-							System.out.println("outer ChannelActive");
-							super.channelActive(ctx);
-						}
-						
-						@Override
-						public void exceptionCaught(ChannelHandlerContext ctx, Throwable t) {
-							System.out.println("outer exception:");
-							t.printStackTrace();
-						}
-
-						@Override
-						public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-							System.out.println("outer ChannelReadComplete");
-							super.channelReadComplete(ctx);
-						}
-
-						@Override
-						public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
-							System.out.println("outer ChannelRegistered");
-							super.channelRegistered(ctx);
-						}
-
-						@Override
-						public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
-							System.out.println("outer ChannelUnregistered");
-							super.channelUnregistered(ctx);
-						}
-
-						@Override
-						public void channelWritabilityChanged(ChannelHandlerContext ctx) throws Exception {
-							System.out.println("outer ChannelWritabilityChanged");
-							super.channelWritabilityChanged(ctx);
-						}
-
-						@Override
-						public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-							System.out.println("outer channelInactive");
-							super.channelInactive(ctx);
-						}
-
-						@Override
 						public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 							Channel channel = (Channel) msg;
 							ChannelPipeline pipeline = channel.pipeline();
-							System.out.println("outer ChannelRead: msg is " + msg);
 
 							// This channel handler will be registered for every connection client that will
 							// inspect any message before it reaches the Minecraft code.
@@ -284,25 +256,14 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 								private ChannelState state = ChannelState.UNKNOWN;
 
 								private ChannelListener listener;
-								
-								@Override
-								public void exceptionCaught(ChannelHandlerContext ctx, Throwable t) {
-									System.out.println("inner exception: " + System.identityHashCode(this));
-									t.printStackTrace();
-									// TODO also call the super methods here later
-								}
 
 								@Override
 								public void channelActive(ChannelHandlerContext ctx) throws Exception {
-									System.out.println("inner ChannelActive");
-									//super.channelActive(ctx);
+
 								}
 
 								@Override
 								public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-									if (state != ChannelState.VANILLA) {
-										System.out.println("inner ChannelReadComplete");
-									}
 									if (state == ChannelState.VANILLA) {
 										super.channelReadComplete(ctx);
 									}
@@ -310,13 +271,10 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 
 								@Override
 								public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
-									System.out.println("inner ChannelRegistered");
-									//super.channelRegistered(ctx);
 								}
 
 								@Override
 								public void channelUnregistered(ChannelHandlerContext ctx) throws Exception {
-									System.out.println("inner ChannelUnregistered");
 									if (state == ChannelState.VANILLA) {
 										super.channelUnregistered(ctx);
 									}
@@ -329,84 +287,156 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 										super.channelWritabilityChanged(ctx);
 									}
 								}
+								
+								private void processGET(byte[] data, ChannelHandlerContext ctx) throws Exception {
+									WebHelper.Type type = WebHelper.determineConnectionType(data);
+									if (type == WebHelper.Type.HTTP) {
+										HTTPListener httpListener = new HTTPListener();
+										httpListener.readHandshake(ctx, data);
+										setCustomState(httpListener, ctx);
+									} else if (type == WebHelper.Type.WEBSOCKET) {
+										if (webSocketHandlerFactory != null) {
+											WebSocketHandler websocketHandler = webSocketHandlerFactory
+													.createHandler(ctx);
+											if (websocketHandler != null) {
+												WebSocketListener websocketListener = new WebSocketListener(
+														websocketHandler);
+												webSocketListeners.add(websocketListener);
+												websocketListener.readInitial(ctx, data);
+												setCustomState(websocketListener, ctx);
+											} else {
+												state = ChannelState.DEAD;
+												ctx.close();
+											}
+										} else {
+											Bukkit.getLogger().warning(
+													"A websocket handshake was received, but there is no websocket handler factory");
+											setVanillaState(ctx);
+										}
+									} else {
+										setVanillaState(ctx);
+									}
+								}
+								
+								private boolean isWSS(ByteBuf message) {
+									
+									return false;
+									
+									// Until I know how to handle secure connections, I will disable this code
+									// because it doesn't add anything while it can prevent players from
+									// connection if their first bytes happen to be those bytes
+									/*
+									if (message.readableBytes() >= FIRST_WSS_BYTES.length) {
+										for (int index = 0; index < FIRST_WSS_BYTES.length; index++) {
+											if (message.getByte(index) != FIRST_WSS_BYTES[index]) {
+												return false;
+											}
+										}
+										return true;
+									} else {
+										return false;
+									}*/
+								}
+								
+								private void processWSS(byte[] data, ChannelHandlerContext ctx) throws Exception {
+									
+									// Uncomment this stuff when you figure out how to handle this stuff properly
+									/*
+									if (webSocketHandlerFactory != null) {
+										WebSocketHandler websocketHandler = webSocketHandlerFactory.createHandler(ctx);
+										if (websocketHandler != null) {
+											WebSocketListener websocketListener = new WebSocketListener(websocketHandler);
+											webSocketListeners.add(websocketListener);
+											websocketListener.readInitial(ctx, data);
+											setCustomState(websocketListener, ctx);
+											System.out.println("processed WSS");
+										} else {
+											state = ChannelState.DEAD;
+											ctx.close();
+										}
+									} else {
+										Bukkit.getLogger().warning("A websocket handshake was received, but there is no websocket handler factory");
+										setVanillaState(ctx);
+									}*/
+									Bukkit.getLogger().info("Someone attempted a connection with https or wss, but that is not (yet) supported.");
+									setVanillaState(ctx);
+								}
+								
+								private boolean isTCP(ByteBuf message) {
+									if (message.readableBytes() >= FIRST_TCP_BYTES.length) {
+										for (int index = 0; index < FIRST_TCP_BYTES.length; index++) {
+											if (message.getByte(index) != FIRST_TCP_BYTES[index]) {
+												return false;
+											}
+										}
+										return true;
+									} else {
+										return false;
+									}
+								}
+								
+								private void processTCP(ByteBuf message, ChannelHandlerContext ctx) throws Exception {
+									if (tcpSocketHandlerFactory != null) {
+										TCPHandler tcpHandler = tcpSocketHandlerFactory.createHandler(ctx);
+										if (tcpHandler != null) {
+											TCPSocketListener tcpListener = new TCPSocketListener(tcpHandler);
+											tcpSocketListeners.add(tcpListener);
+											// The tcp listener doesn't need to know that the message
+											// starts with the TCP bytes, so 'consume' them
+											for (int counter = 0; counter < FIRST_TCP_BYTES.length; counter++) {
+												message.readByte();
+											}
+											tcpListener.readInitial(ctx, message);
+											setCustomState(tcpListener, ctx);
+										} else {
+											state = ChannelState.DEAD;
+											ctx.close();
+										}
+									} else {
+										Bukkit.getLogger().warning("Someone attempted a TCP connection, but there is no TCP handler factory.");
+										setVanillaState(ctx);
+									}
+								}
+								
+								private boolean startsWith(ByteBuf message, String string) {
+									if (message.readableBytes() >= string.length()) {
+										for (int index = 0; index < string.length(); index++) {
+											if (message.getByte(index) != string.charAt(index)) {
+												return false;
+											}
+										}
+										return true;
+									} else {
+										return false;
+									}
+								}
 
 								@Override
 								public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-									if (state != ChannelState.VANILLA) {
-										System.out.println("inner ChannelRead " + System.identityHashCode(this));
-									}
 									try {
 										if (state == ChannelState.CUSTOM) {
 											listener.read(ctx, (ByteBuf) msg);
 										} else if (state == ChannelState.UNKNOWN) {
 											ByteBuf message = (ByteBuf) msg;
-											byte firstByte = message.getByte(0);
-											if (firstByte == FIRST_MINECRAFT_BYTE) {
-												setVanillaState(ctx);
-											} else if (firstByte == FIRST_WEB_BYTE) {
+											
+											byte[] allBytes = new byte[message.readableBytes()];
+											message.getBytes(0, allBytes);
+											System.out.println("Bytes as string are " + new String(allBytes));
+											
+											if (startsWith(message, "GET /")) {
+												// GET request, so a web socket or http request
 												byte[] data = new byte[message.readableBytes()];
 												message.getBytes(0, data);
-												WebHelper.Type type = WebHelper.determineConnectionType(data);
-												System.out.println("type is " + type);
-												if (type == WebHelper.Type.HTTP) {
-													HTTPListener httpListener = new HTTPListener();
-													httpListener.readHandshake(ctx, data);
-													setCustomState(httpListener, ctx);
-												} else if (type == WebHelper.Type.WEBSOCKET) {
-													if (webSocketHandlerFactory != null) {
-														WebSocketHandler websocketHandler = webSocketHandlerFactory
-																.createHandler(ctx);
-														if (websocketHandler != null) {
-															WebSocketListener websocketListener = new WebSocketListener(
-																	websocketHandler);
-															webSocketListeners.add(websocketListener);
-															websocketListener.readInitial(ctx, data);
-															setCustomState(websocketListener, ctx);
-														} else {
-															state = ChannelState.DEAD;
-															ctx.close();
-														}
-													} else {
-														Bukkit.getLogger().warning(
-																"A websocket handshake was received, but there is no websocket handler factory");
-														setVanillaState(ctx);
-													}
-												} else {
-													setVanillaState(ctx);
-												}
-											} else if (firstByte == FIRST_SECURE_WEB_BYTE) {
-												// TODO implement the secure web protocols and find a way to read this
-												// stuff
-												// and find the difference
-												System.out.println(
-														"We are dealing with a secure websocket or https connection");
+												processGET(data, ctx);
+											} else if (isWSS(message)) {
+												// Secure Web Socket Handshake
 												byte[] data = new byte[message.readableBytes()];
 												message.getBytes(0, data);
-												System.out.println(Arrays.toString(data));
-												setVanillaState(ctx);
-											} else if (firstByte == FIRST_TCP_BYTE) {
-												if (tcpSocketHandlerFactory != null) {
-													TCPHandler tcpHandler = tcpSocketHandlerFactory.createHandler(ctx);
-													if (tcpHandler != null) {
-														TCPSocketListener tcpListener = new TCPSocketListener(
-																tcpHandler);
-														tcpSocketListeners.add(tcpListener);
-														// The tcp listener doesn't need to know that the first byte is
-														// FIRST_TCP_BYTE
-														message.readByte();
-														tcpListener.readInitial(ctx, message);
-														setCustomState(tcpListener, ctx);
-													} else {
-														state = ChannelState.DEAD;
-														ctx.close();
-													}
-												} else {
-													Bukkit.getLogger().warning(
-															"Someone attempted a TCP connection, but there is no TCP handler factory.");
-													setVanillaState(ctx);
-												}
+												processWSS(data, ctx);
+											} else if (isTCP(message)) {
+												// TCP handshake
+												processTCP(message, ctx);
 											} else {
-												System.out.println("Unknown connection type");
 												setVanillaState(ctx);
 											}
 										}
@@ -420,20 +450,19 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 
 								@Override
 								public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-									System.out.println("inner channelInactive");
 									if (state == ChannelState.CUSTOM) {
 										listener.onClose(ctx);
-									} else if (state == ChannelState.VANILLA){
+									} else if (state == ChannelState.VANILLA) {
 										super.channelInactive(ctx);
 									}
 								}
-								
+
 								private void setVanillaState(ChannelHandlerContext ctx) throws Exception {
 									state = ChannelState.VANILLA;
 									super.channelRegistered(ctx);
 									super.channelActive(ctx);
 								}
-								
+
 								private void setCustomState(ChannelListener listener, ChannelHandlerContext ctx) {
 									this.listener = listener;
 									state = ChannelState.CUSTOM;

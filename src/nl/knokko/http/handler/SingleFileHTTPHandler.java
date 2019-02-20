@@ -3,7 +3,7 @@ package nl.knokko.http.handler;
 import java.io.File;
 import java.io.IOException;
 
-import nl.knokko.http.HTTPHandshake;
+import nl.knokko.http.HTTPGetRequest;
 import nl.knokko.http.response.HTTPResponse;
 import nl.knokko.http.response.SimpleHTTPResponse;
 import nl.knokko.multiserver.plugin.ServerPlugin;
@@ -22,7 +22,7 @@ public class SingleFileHTTPHandler implements HTTPHandler {
 	}
 
 	@Override
-	public HTTPResponse process(HTTPHandshake handshake) {
+	public HTTPResponse process(HTTPGetRequest handshake) {
 		return response;
 	}
 }

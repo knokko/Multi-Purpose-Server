@@ -187,6 +187,9 @@ public class WebSocketListener implements ChannelListener, org.java_websocket.We
 
 	@Override
 	public void onClose(ChannelHandlerContext ctx) {
+		
+		// TODO This will cause an exception of fired on the onDisable method because the plug-in will be
+		// disabled before this code gets called
 		if (!calledOnClose) {
 			Bukkit.getScheduler().scheduleSyncDelayedTask(ServerPlugin.getInstance(), () -> {
 				if (!calledOnClose) {

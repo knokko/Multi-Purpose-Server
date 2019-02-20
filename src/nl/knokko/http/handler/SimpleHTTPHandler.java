@@ -3,7 +3,8 @@ package nl.knokko.http.handler;
 import java.io.File;
 import java.io.IOException;
 
-import nl.knokko.http.HTTPHandshake;
+import nl.knokko.http.HTTPGetRequest;
+import nl.knokko.http.response.FileNotFoundHTTPResponse;
 import nl.knokko.http.response.HTTPResponse;
 import nl.knokko.http.response.SimpleHTTPResponse;
 import nl.knokko.multiserver.plugin.ServerPlugin;
@@ -55,7 +56,7 @@ public class SimpleHTTPHandler implements HTTPHandler {
 	}
 
 	@Override
-	public HTTPResponse process(HTTPHandshake handshake) {
+	public HTTPResponse process(HTTPGetRequest handshake) {
 		String requestedFile = handshake.findRequestedFile();
 		File target;
 		if (requestedFile.isEmpty()) {
@@ -66,7 +67,7 @@ public class SimpleHTTPHandler implements HTTPHandler {
 				target = defaultFile;
 			} else {
 				// Strange scenario since this handler should be used for websites with at least 2 files
-				return null;
+				return new FileNotFoundHTTPResponse();
 			}
 		} else {
 			target = new File(folder + "/" + requestedFile);
@@ -75,14 +76,12 @@ public class SimpleHTTPHandler implements HTTPHandler {
 			try {
 				return new SimpleHTTPResponse(ServerPlugin.getContentTypeForFile(target.getName()), ArrayHelper.readFile(target));
 			} catch (IOException io) {
-				// 404?
 				io.printStackTrace();
-				return null;
+				return new FileNotFoundHTTPResponse();
 			}
 		} else {
 			System.out.println("Can't find file " + target);
-			// TODO maybe a neat file not found 404?
-			return null;
+			return new FileNotFoundHTTPResponse();
 		}
 	}
 }
