@@ -11,6 +11,7 @@ public class DefaultContentTypes {
 		MAP.put("html", "text/html");
 		MAP.put("htm", "text/html");
 		MAP.put("js", "application/javascript");
+		MAP.put("wasm", "application/wasm");
 		MAP.put("css", "text/css");
 		
 		MAP.put("pdf", "application/pdf");

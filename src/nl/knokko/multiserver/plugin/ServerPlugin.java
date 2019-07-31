@@ -421,7 +421,6 @@ public class ServerPlugin extends JavaPlugin implements Listener {
 											
 											byte[] allBytes = new byte[message.readableBytes()];
 											message.getBytes(0, allBytes);
-											System.out.println("Bytes as string are " + new String(allBytes));
 											
 											if (startsWith(message, "GET /")) {
 												// GET request, so a web socket or http request

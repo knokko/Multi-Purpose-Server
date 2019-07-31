@@ -1,8 +1,9 @@
 package nl.knokko.util;
 
+import java.io.DataInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Arrays;
 
 /**
@@ -61,16 +62,8 @@ public class ArrayHelper {
 			throw new IOException("File " + file + " is too large!");
 		}
 		byte[] bytes = new byte[(int) fileLength];
-		FileInputStream input = new FileInputStream(file);
-		int totalRead = 0;
-		while (totalRead < bytes.length) {
-			int read = input.read(bytes, totalRead, bytes.length - totalRead);
-			if (read == -1) {
-				input.close();
-				throw new IOException("End of file " + file + " was reached before all bytes were read");
-			}
-			totalRead += read;
-		}
+		DataInputStream input = new DataInputStream(Files.newInputStream(file.toPath()));
+		input.readFully(bytes);
 		input.close();
 		return bytes;
 	}

@@ -1,6 +1,5 @@
 package nl.knokko.multiserver.plugin.command;
 
-import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
